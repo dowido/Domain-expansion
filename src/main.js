@@ -90,8 +90,8 @@ void main() {
                 pos.y -= lift * 420.0;
                 pos.x += sin(u_time * 0.003 + a_id) * lift * 60.0;
                 pos.z += cos(u_time * 0.002 + a_id) * lift * 60.0;
-                v_alpha *= (1.0 - lift);
-                v_color = vec3(1.0); // Pure white smoke as requested
+                v_alpha *= clamp(1.5 - lift * 2.0, 0.0, 1.0); // Fades later in the journey
+                v_color = vec3(1.0); 
             }
         }
         else if (u_char_id == 6) { 
@@ -358,15 +358,15 @@ class ParticleSystem {
                         if (r < 0.08) { y -= (0.08 - r) * 0.4; } 
                         const noise = (Math.random() - 0.5) * 0.03;
                         pts.push({ x, y: -y + 0.3, z: z + noise, id: Math.random() * 100 }); 
-                    } else { // Eruption/White Smoke hadi haifanyi
+                    } else { // Eruption/White Smoke
                         const angle = Math.random() * Math.PI * 2;
-                        const r = Math.random() * 0.05;
+                        const r = Math.random() * 0.04;
                         pts.push({ 
                             x: Math.cos(angle) * r, 
-                            y: -0.5, 
+                            y: -0.4, 
                             z: Math.sin(angle) * r, 
                             id: 850.0 + Math.random() * 100,
-                            size: 3.5
+                            size: 10.0
                         });
                     }
                 }
