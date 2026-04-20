@@ -1,33 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Domain Expansion by Artello</title>
-  </head>
-  <body data-theme="none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Expansion Simulator</title>
+</head>
+<body data-theme="none">
+
     <div id="app">
-      <canvas id="particleCanvas"></canvas>
-      <div class="flash" id="flash"></div>
+        <canvas id="particleCanvas"></canvas>
+        
+        <div class="ui-layer" id="ui-layer">
+            <header>
+                <h1>Domains</h1>
+                <p>Volumetric 3D Image Renderer</p>
+            </header>
 
-      
-      <div class="ui-layer">
-        <header>
-          <h1>Domain Expansion</h1>
-          <p>The peak of jujutsu sorcery</p>
-        </header>
-
-        <div class="domain-info-popup" id="domainInfo">
-          <h2 class="info-title" id="infoName"></h2>
-          <p class="info-text" id="infoDesc"></p>
+            <div class="domain-info-popup" id="domainInfo">
+                <h2 class="info-title" id="infoName">Domain Name</h2>
+                <p class="info-text" id="infoDesc">Domain Description</p>
+            </div>
+            
+            <div class="selector-bar" id="characterGrid"></div>
         </div>
-
-        <div class="selector-bar" id="characterGrid">
-          <!-- Characters will be injected here -->
-        </div>
-      </div>
     </div>
+
     <script type="module" src="/src/main.js"></script>
-  </body>
+</body>
 </html>
