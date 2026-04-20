@@ -1,7 +1,7 @@
 import './style.css';
 
 const characters = [
-    { id: 'gojo', name: 'Gojo', domain: 'Unlimited Void', desc: "Transmits infinite information, paralyzing the target.", colors: [[255, 255, 255], [162, 155, 254], [108, 92, 231]], asset: '/assets/black_hole.png' },
+    { id: 'gojo', name: 'Gojo', domain: 'Unlimited Void', desc: "Transmits infinite information, paralyzing the target.", colors: [[255, 255, 255], [200, 200, 200], [100, 100, 100]], asset: '/assets/black_hole.png' },
     { id: 'sukuna', name: 'Sukuna', domain: 'Malevolent Shrine', desc: "A divine shrine that slashes everything in range.", colors: [[255, 30, 30], [150, 0, 0], [45, 52, 54]], asset: '/assets/sukuna.png' },
     { id: 'megumi', name: 'Megumi', domain: 'Shadow Garden', desc: "Fills the area with shadows and summoned beasts.", colors: [[0, 255, 255], [0, 168, 255], [255, 255, 255]], asset: '/assets/megumi.png' },
     { id: 'mahito', name: 'Mahito', domain: 'Self-Perfection', desc: "Directly transfigures souls within its reach.", colors: [[255, 126, 185], [255, 180, 200], [223, 230, 233]], asset: '/assets/mahito.png' },
@@ -61,7 +61,13 @@ void main() {
         if (u_char_id == 1) { 
             float gojo_expand = sin(ep1 * 3.14) * 150.0;
             pos += normalize(pos + vec3(0.001)) * gojo_expand;
-            pos.x += sin(u_time * 0.001 + pos.y * 0.01) * 5.0;
+            
+            // Fast 3D spin (wheel-like)
+            float gojo_spin = u_time * 0.012; 
+            float c = cos(gojo_spin), s = sin(gojo_spin);
+            pos.xy = mat2(c, -s, s, c) * pos.xy;
+            
+            pos.y += sin(u_time * 0.002 + pos.x * 0.01) * 15.0;
         }
         else if (u_char_id == 2) { 
             float slash = sin(u_time * 0.006 + length(pos)*0.01 + a_id) * 5.0;
@@ -313,7 +319,37 @@ class ParticleSystem {
         this.activeChar = char;
 
         if (!this.coordinateCache[char.id]) {
-            const img = new Image();
+            if (char.id === 'gojo') {
+                const pts = [];
+                const count = 30000;
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = 0.38 + Math.random() * 0.1; 
+                    pts.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+                }
+                this.coordinateCache[char.id] = { points: pts, ar: 1 };
+            } else if (char.id === 'jogo') {
+                const pts = [];
+                const count = 50000;
+                for (let i = 0; i < count; i++) {
+                    const r = Math.sqrt(Math.random()) * 0.5;
+                    const angle = Math.random() * Math.PI * 2;
+                    const x = Math.cos(angle) * r;
+                    const y = Math.sin(angle) * r;
+                    let z = (0.5 - r) * 0.6; // Slope
+                    
+                    // Crater logic
+                    if (r < 0.1) {
+                        z = (0.5 - 0.1) * 0.6 - (0.1 - r) * 0.8;
+                    }
+                    
+                    // Add some rock noise
+                    const noise = (Math.random() - 0.5) * 0.04;
+                    pts.push({ x, y, z: z + noise });
+                }
+                this.coordinateCache[char.id] = { points: pts, ar: 1 };
+            } else {
+                const img = new Image();
             img.src = char.asset;
             try {
                 await new Promise((resolve, reject) => {
@@ -351,6 +387,7 @@ class ParticleSystem {
                 })),
                 ar: rw / rh
             };
+            }
         }
 
         const { points, ar } = this.coordinateCache[char.id];
@@ -373,15 +410,19 @@ class ParticleSystem {
                 this.targets[i * 3] = p.x * sw + (Math.random() - 0.5) * 4.0;
                 this.targets[i * 3 + 1] = p.y * sh + (Math.random() - 0.5) * 4.0;
                 
-                // Double-Sided Volumetric Logic
-                const group = i % 3;
-                if (group === 0) { // Front Face
-                    this.targets[i * 3 + 2] = volumeDepth * 0.5;
-                } else if (group === 1) { // Back Face (Recognizable from back)
-                    this.targets[i * 3 + 2] = -volumeDepth * 0.5;
-                    this.targets[i * 3] *= -1; // Mirror X for back visibility
-                } else { // Fill
-                    this.targets[i * 3 + 2] = (Math.random() - 0.5) * volumeDepth;
+                if (p.z !== undefined) {
+                    this.targets[i * 3 + 2] = p.z * sw; 
+                } else {
+                    // Double-Sided Volumetric Logic
+                    const group = i % 3;
+                    if (group === 0) { // Front Face
+                        this.targets[i * 3 + 2] = volumeDepth * 0.5;
+                    } else if (group === 1) { // Back Face (Recognizable from back)
+                        this.targets[i * 3 + 2] = -volumeDepth * 0.5;
+                        this.targets[i * 3] *= -1; // Mirror X for back visibility
+                    } else { // Fill
+                        this.targets[i * 3 + 2] = (Math.random() - 0.5) * volumeDepth;
+                    }
                 }
 
                 this.tags[i] = 1.0;
