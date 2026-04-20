@@ -146,7 +146,7 @@ class ParticleSystem {
 
     // Performance Optimization: Reduced particle count for mobile devices
 
-    this.particleCount = 2000000;
+    this.particleCount = 400000;
 
     this.dpr = window.devicePixelRatio || 1;
 
