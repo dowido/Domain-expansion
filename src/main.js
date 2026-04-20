@@ -28,6 +28,8 @@ uniform vec2 u_center;
 uniform vec2 u_mouse;
 uniform vec2 u_rotation;
 uniform float u_mousedown;
+uniform float u_technique;
+uniform float u_tech_time;
 
 varying vec3 v_color;
 varying float v_alpha;
@@ -72,13 +74,32 @@ void main() {
             float slash = sin(u_time * 0.006 + length(pos)*0.01 + a_id) * 5.0;
             pos.x += slash; pos.y -= slash * 0.5;
         }
-        else if (u_char_id == 3) { 
-            pos.x += sin(u_time * 0.003 + pos.y * 0.01) * 6.0;
-            pos.z += cos(u_time * 0.0025 + pos.x * 0.01) * 6.0;
+        else if (u_char_id == 3) { // Megumi: Abyssal Vortex
+            float speed = u_time * 0.01;
+            float c = cos(speed), s = sin(speed);
+            pos.xz = mat2(c, -s, s, c) * pos.xz;
+            
+            // Radial Waves (Rolling Floor)
+            float dist_xz = length(pos.xz);
+            float waves = sin(dist_xz * 0.02 - u_time * 0.015) * 40.0;
+            pos.y += waves;
+
+            // Whipping Tendrils
+            if (a_id > 900.0) {
+                float whip = u_time * 0.005 + a_id;
+                pos.x += sin(whip) * 80.0;
+                pos.z += cos(whip * 0.8) * 80.0;
+                pos.y -= abs(sin(whip * 1.2)) * 120.0;
+            }
         }
-        else if (u_char_id == 4) { 
-            pos.x += sin(u_time * 0.005 + a_id * 3.14) * 8.0;
-            pos.y += cos(u_time * 0.004 + a_id * 2.71) * 8.0;
+        else if (u_char_id == 4) { // Mahito: Master-Hand Tunnel
+            // Rhythmic Soul-Clench (Heartbeat)
+            float clench = 1.0 + pow(abs(sin(u_time * 0.003)), 4.0) * 0.3;
+            pos.xz *= (1.0 / clench);
+            
+            float spin = u_time * 0.003;
+            float c = cos(spin), s = sin(spin);
+            pos.xz = mat2(c, -s, s, c) * pos.xz;
         }
         else if (u_char_id == 5) { 
             // Jogo: Rotate along Y-axis solely
@@ -118,15 +139,30 @@ void main() {
         v_alpha = 0.2 + 0.3 * sin(u_time * 0.002 + a_id * 6.28);
     }
 
+    // --- Gojo Integrated Techniques ---
+    if (u_char_id == 1 && u_mousedown > 0.5) {
+        if (u_technique == 2.0) { // RED: Repulsion Blast
+            pos += normalize(pos + vec3(0.001)) * 140.0 * ep2;
+        } else if (u_technique == 3.0) { // PURPLE: Traveling Void
+            float p_t = (u_time - u_tech_time) * 0.15;
+            vec3 p_pos = vec3(mod(p_t, 1800.0) - 900.0, 0.0, 0.0);
+            float p_d = length(pos - p_pos);
+            if (p_d < 180.0) {
+                pos += normalize(pos - p_pos) * (180.0 - p_d) * 2.0;
+                v_color = vec3(0.7, 0.0, 1.0);
+            }
+        }
+    }
+
     vec2 screen_proj_raw = pos.xy + u_center;
     float m_dist = distance(screen_proj_raw, u_mouse);
     if (m_dist < 200.0) {
         float force = (200.0 - m_dist) * (a_tag > 0.5 ? 0.25 : 0.8);
         vec2 dir = normalize(screen_proj_raw - u_mouse);
-        if (u_mousedown > 0.5) {
-            pos.xy -= dir * force * 1.5; // Attraction
-        } else {
-            pos.xy += dir * force; // Repel
+        if (u_mousedown > 0.5 && u_technique < 1.1) { // Normal BLUE Attraction
+            pos.xy -= dir * force * 1.5;
+        } else if (u_mousedown < 0.5) {
+            pos.xy += dir * force; // Passive Repel
         }
     }
 
@@ -178,9 +214,10 @@ varying vec2 v_uv;
 
 void main() {
     vec2 uv = v_uv;
+    float dist = distance(uv, vec2(0.5));
     
-    // Chromatic Aberration
-    float shift = 0.003 * (1.0 + sin(u_time * 0.005) * 0.5);
+    // Chromatic Aberration (Vignetted to edges for clarity)
+    float shift = 0.005 * smoothstep(0.2, 0.7, dist); 
     float r = texture2D(u_tex, uv + vec2(shift, 0.0)).r;
     float g = texture2D(u_tex, uv).g;
     float b = texture2D(u_tex, uv - vec2(shift, 0.0)).b;
@@ -188,14 +225,14 @@ void main() {
     
     // Bloom Approximation
     vec3 bloom = texture2D(u_tex, uv).rgb;
-    bloom += texture2D(u_tex, uv + vec2(0.002, 0.0)).rgb * 0.3;
-    bloom += texture2D(u_tex, uv - vec2(0.002, 0.0)).rgb * 0.3;
-    bloom += texture2D(u_tex, uv + vec2(0.0, 0.002)).rgb * 0.3;
-    bloom += texture2D(u_tex, uv - vec2(0.0, 0.002)).rgb * 0.3;
-    color += bloom * 0.3;
+    bloom += texture2D(u_tex, uv + vec2(0.002, 0.0)).rgb * 0.4;
+    bloom += texture2D(u_tex, uv - vec2(0.002, 0.0)).rgb * 0.4;
+    bloom += texture2D(u_tex, uv + vec2(0.0, 0.002)).rgb * 0.4;
+    bloom += texture2D(u_tex, uv - vec2(0.0, 0.002)).rgb * 0.4;
+    color += bloom * 0.4;
 
     // Scanlines
-    float scanline = sin(uv.y * u_res.y * 1.2) * 0.04;
+    float scanline = sin(uv.y * u_res.y * 1.5) * 0.05;
     color -= scanline;
 
     gl_FragColor = vec4(color, 1.0);
@@ -233,6 +270,9 @@ class ParticleSystem {
         this.targetRotY = 0;
         this.isDragging = false;
         this.lastMousePos = [0, 0];
+        
+        this.technique = 0; 
+        this.techTime = 0;
 
         this.initWebGL();
         this.resize();
@@ -267,9 +307,11 @@ class ParticleSystem {
             mouse: gl.getUniformLocation(this.program, 'u_mouse'),
             rotation: gl.getUniformLocation(this.program, 'u_rotation'),
             mousedown: gl.getUniformLocation(this.program, 'u_mousedown'),
+            tech: gl.getUniformLocation(this.program, 'u_technique'),
+            techTime: gl.getUniformLocation(this.program, 'u_tech_time'),
         };
 
-        // Post Processing Program
+        // Post Processing Program the bloom calculations dijrv
         const pvs = this.compileShader(gl, gl.VERTEX_SHADER, POST_V_SHADER);
         const pfs = this.compileShader(gl, gl.FRAGMENT_SHADER, POST_F_SHADER);
         this.postProgram = gl.createProgram();
@@ -293,7 +335,7 @@ class ParticleSystem {
             quad: gl.createBuffer(),
         };
 
-        // Quad Buffer
+        // Quad Buffer i stole this logic from gemini dont kill me
         gl.bindBuffer(gl.ARRAY_BUFFER, this.bufs.quad);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
 
@@ -363,19 +405,30 @@ class ParticleSystem {
         });
 
         window.addEventListener('mousedown', (e) => {
-            this.isDragging = true;
+            if (e.button === 0) this.technique = 1; // Blue
+            else if (e.button === 2) this.technique = 2; // Red
+            else if (e.button === 1) this.technique = 3; // Purple
+            
+            this.isDragging = (e.button === 0);
             this.isMouseDown = true;
+            this.techTime = Date.now() - this.startTime;
             this.lastMousePos = [e.clientX, e.clientY];
             document.body.classList.add('grabbing');
+            if (e.button !== 0) e.preventDefault();
         });
 
         window.addEventListener('mouseup', () => {
             this.isDragging = false;
             this.isMouseDown = false;
+            this.technique = 0;
             document.body.classList.remove('grabbing');
         });
 
-        // Touch support
+        window.addEventListener('contextmenu', e => {
+            if (this.activeChar && this.activeChar.id === 'gojo') e.preventDefault();
+        });
+
+        // Touch support 
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 this.isDragging = true;
@@ -496,6 +549,108 @@ class ParticleSystem {
                     }
                 }
                 this.coordinateCache[char.id] = { points: pts, ar: 1 };
+            } else if (char.id === 'megumi') {
+                const pts = [];
+                const count = 150000;
+                for (let i = 0; i < count; i++) {
+                    if (i < 120000) { // Whirlpool Spiral
+                        const angle = Math.random() * Math.PI * 18.0; 
+                        const r = Math.sqrt(angle / (Math.PI * 18.0)) * 0.85;
+                        const x = Math.cos(angle) * r;
+                        const z = Math.sin(angle) * r;
+                        const y = (1.0 - r) * 0.2 + (Math.random() - 0.5) * 0.05;
+                        pts.push({ x, y, z });
+                    } else { // Whipping Tendrils
+                        const tIdx = Math.floor(Math.random() * 20);
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = 0.4 + Math.random() * 0.4;
+                        const x = Math.cos(angle) * r;
+                        const z = Math.sin(angle) * r;
+                        const y = -Math.random() * 0.8 - 0.2;
+                        pts.push({ x, y, z, id: 910.0 + tIdx });
+                    }
+                }
+                this.coordinateCache[char.id] = { points: pts, ar: 1 };
+            } else if (char.id === 'mahito') {
+                const pts = [];
+                const handQty = 10;
+                const ptsPerHand = 10000;
+                
+                const rand = () => Math.random();
+                const randN = () => (Math.random() - 0.5);
+
+                const addHand = (hx, hy, hz, hRot) => {
+                    const localPts = [];
+                    // Capsule helper
+                    const capsule = (ax, ay, az, bx, by, bz, radius, count) => {
+                        const dx = bx - ax, dy = by - ay, dz = bz - az;
+                        const len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+                        const ux = dx/len, uy = dy/len, uz = dz/len;
+                        let vx, vy, vz;
+                        if (Math.abs(ux) < 0.9) { vx=0; vy=-uz; vz=uy; } else { vx=-uy; vy=ux; vz=0; }
+                        const vl = Math.sqrt(vx*vx+vy*vy+vz*vz);
+                        vx/=vl; vy/=vl; vz/=vl;
+                        const wx = uy*vz - uz*vy, wy = uz*vx - ux*vz, wz = ux*vy - uy*vx;
+
+                        for (let i = 0; i < count; i++) {
+                            const t = rand(), rr = radius * (0.75 + rand() * 0.35), ang = rand() * Math.PI * 2;
+                            const px = ax + dx*t + (Math.cos(ang)*vx + Math.sin(ang)*wx) * rr;
+                            const py = ay + dy*t + (Math.cos(ang)*vy + Math.sin(ang)*wy) * rr;
+                            const pz = az + dz*t + (Math.cos(ang)*vz + Math.sin(ang)*wz) * rr;
+                            localPts.push({ x: px, y: py, z: pz });
+                        }
+                    };
+                    // Box helper
+                    const box = (cx, cy, cz, hw, hh, hd, count) => {
+                        for (let i = 0; i < count; i++) {
+                            const face = Math.floor(rand()*6);
+                            let x, y, z; const r = 0.92 + rand()*0.1;
+                            if (face === 0) { x= hw*r; y=randN()*hh; z=randN()*hd; }
+                            else if (face===1){ x=-hw*r; y=randN()*hh; z=randN()*hd; }
+                            else if (face===2){ x=randN()*hw; y= hh*r; z=randN()*hd; }
+                            else if (face===3){ x=randN()*hw; y=-hh*r; z=randN()*hd; }
+                            else if (face===4){ x=randN()*hw; y=randN()*hh; z= hd*r; }
+                            else { x=randN()*hw; y=randN()*hh; z=-hd*r; }
+                            if (Math.abs(x)/hw + Math.abs(y)/hh > 1.9) continue;
+                            localPts.push({ x: cx+x, y: cy+y, z: cz+z });
+                        }
+                    };
+
+                    box(0, 0, 0, 0.22, 0.18, 0.055, ptsPerHand * 0.15); // Palm
+                    const fingers = [
+                        { x: -0.135, y: 0.19, splay: 0.08, len:[0.15,0.11,0.08], r:[0.035,0.03,0.02] },
+                        { x: -0.045, y: 0.20, splay: 0.01, len:[0.16,0.12,0.09], r:[0.04,0.035,0.025] },
+                        { x: 0.045, y: 0.195, splay: -0.01, len:[0.15,0.11,0.08], r:[0.035,0.03,0.02] },
+                        { x: 0.135, y: 0.175, splay: -0.09, len:[0.12,0.08,0.06], r:[0.03,0.025,0.018] }
+                    ];
+                    fingers.forEach(f => {
+                        let bx = f.x, by = f.y, bz = 0;
+                        f.len.forEach((sl, si) => {
+                            const ex = bx + Math.sin(f.splay)*sl, ey = by + Math.cos(f.splay)*sl, ez = bz - si*0.01;
+                            capsule(bx, by, bz, ex, ey, ez, f.r[si], ptsPerHand * 0.12);
+                            bx = ex; by = ey; bz = ez;
+                        });
+                    });
+                    // Thumb
+                    capsule(-0.23, 0.06, 0.02, -0.32, 0.15, 0.02, 0.05, ptsPerHand * 0.1);
+
+                    // Transform to tunnel
+                    const s = 0.8; // Scale
+                    const c = Math.cos(hRot), sn = Math.sin(hRot);
+                    localPts.forEach(p => {
+                        const tx = p.x * s, ty = p.y * s, tz = p.z * s;
+                        const rx = tx * c - tz * sn;
+                        const rz = tx * sn + tz * c;
+                        pts.push({ x: hx + rx, y: hy + ty, z: hz + rz });
+                    });
+                };
+
+                for (let i = 0; i < handQty; i++) {
+                    const ang = (i / handQty) * Math.PI * 2;
+                    const r = 0.6;
+                    addHand(Math.cos(ang)*r, (randN()*0.6), Math.sin(ang)*r, -ang - Math.PI/2);
+                }
+                this.coordinateCache[char.id] = { points: pts, ar: 0.62 };
             } else {
                 const img = new Image();
             img.src = char.asset;
@@ -563,7 +718,7 @@ class ParticleSystem {
                 } else {
                     // Double-Sided Volumetric Logic
                     const group = i % 3;
-                    if (group === 0) { // Front Face
+                    if (group === 0) { // Front Face but i think this one is deprecated for now
                         this.targets[i * 3 + 2] = volumeDepth * 0.5;
                     } else if (group === 1) { // Back Face (Recognizable from back)
                         this.targets[i * 3 + 2] = -volumeDepth * 0.5;
@@ -644,6 +799,8 @@ class ParticleSystem {
         gl.uniform2f(this.locs.mouse, this.mouse[0], this.mouse[1]);
         gl.uniform2f(this.locs.rotation, this.rotX, this.rotY);
         gl.uniform1f(this.locs.mousedown, this.isMouseDown ? 1.0 : 0.0);
+        gl.uniform1f(this.locs.tech, this.technique || 0.0);
+        gl.uniform1f(this.locs.techTime, this.techTime || 0.0);
         if (this.currentCenter) gl.uniform2f(this.locs.center, this.currentCenter[0], this.currentCenter[1]);
         
         const bind = (name, loc, size) => {
