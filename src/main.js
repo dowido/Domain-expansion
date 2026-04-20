@@ -27,6 +27,7 @@ uniform int u_char_id;
 uniform vec2 u_center;
 uniform vec2 u_mouse;
 uniform vec2 u_rotation;
+uniform float u_mousedown;
 
 varying vec3 v_color;
 varying float v_alpha;
@@ -107,20 +108,33 @@ void main() {
         v_color = a_color;
         v_alpha = ep2 * 0.6 + 0.2;
     } else {
-        pos.x += sin(u_time * 0.0005 + a_id * 2.14) * 40.0;
-        pos.y += cos(u_time * 0.0006 + a_id * 1.73) * 40.0;
-        pos.z += sin(u_time * 0.0004 + a_id * 3.33) * 40.0;
+        // Cursed Energy Flow Field (Background)
+        float flow_t = u_time * 0.0004;
+        pos.x += sin(pos.y * 0.005 + flow_t + a_id) * 60.0;
+        pos.y += cos(pos.x * 0.005 + flow_t) * 60.0;
+        pos.z += sin(pos.x * 0.003 + flow_t + a_id * 3.14) * 40.0;
 
         v_color = mix(a_color, vec3(1.0, 1.0, 1.0), 0.75);
-        v_alpha = 0.3 + 0.3 * sin(u_time * 0.003 + a_id * 6.28);
+        v_alpha = 0.2 + 0.3 * sin(u_time * 0.002 + a_id * 6.28);
     }
 
     vec2 screen_proj_raw = pos.xy + u_center;
     float m_dist = distance(screen_proj_raw, u_mouse);
-    if (m_dist < 150.0) {
-        float repel = a_tag > 0.5 ? 0.2 : 0.6;
-        pos.xy += normalize(screen_proj_raw - u_mouse) * (150.0 - m_dist) * repel;
+    if (m_dist < 200.0) {
+        float force = (200.0 - m_dist) * (a_tag > 0.5 ? 0.25 : 0.8);
+        vec2 dir = normalize(screen_proj_raw - u_mouse);
+        if (u_mousedown > 0.5) {
+            pos.xy -= dir * force * 1.5; // Attraction
+        } else {
+            pos.xy += dir * force; // Repel
+        }
     }
+
+    // Space-Time Twist
+    float twist = sin(u_time * 0.001) * 0.2 * ep2;
+    float dist = length(pos.xy);
+    float ang = atan(pos.y, pos.x) + twist * exp(-dist * 0.005);
+    pos.xy = vec2(cos(ang), sin(ang)) * dist;
 
     float perspective = 1000.0 / (1000.0 - pos.z);
     vec2 screen_pos = pos.xy * perspective + u_center;
@@ -143,6 +157,48 @@ void main() {
     if (d > 0.5) discard;
     float alpha = smoothstep(0.5, 0.1, d) * v_alpha;
     gl_FragColor = vec4(v_color, alpha * 1.5);
+}
+`;
+
+const POST_V_SHADER = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+const POST_F_SHADER = `
+precision highp float;
+uniform sampler2D u_tex;
+uniform float u_time;
+uniform vec2 u_res;
+varying vec2 v_uv;
+
+void main() {
+    vec2 uv = v_uv;
+    
+    // Chromatic Aberration
+    float shift = 0.003 * (1.0 + sin(u_time * 0.005) * 0.5);
+    float r = texture2D(u_tex, uv + vec2(shift, 0.0)).r;
+    float g = texture2D(u_tex, uv).g;
+    float b = texture2D(u_tex, uv - vec2(shift, 0.0)).b;
+    vec3 color = vec3(r, g, b);
+    
+    // Bloom Approximation
+    vec3 bloom = texture2D(u_tex, uv).rgb;
+    bloom += texture2D(u_tex, uv + vec2(0.002, 0.0)).rgb * 0.3;
+    bloom += texture2D(u_tex, uv - vec2(0.002, 0.0)).rgb * 0.3;
+    bloom += texture2D(u_tex, uv + vec2(0.0, 0.002)).rgb * 0.3;
+    bloom += texture2D(u_tex, uv - vec2(0.0, 0.002)).rgb * 0.3;
+    color += bloom * 0.3;
+
+    // Scanlines
+    float scanline = sin(uv.y * u_res.y * 1.2) * 0.04;
+    color -= scanline;
+
+    gl_FragColor = vec4(color, 1.0);
 }
 `;
 
@@ -210,6 +266,21 @@ class ParticleSystem {
             center: gl.getUniformLocation(this.program, 'u_center'),
             mouse: gl.getUniformLocation(this.program, 'u_mouse'),
             rotation: gl.getUniformLocation(this.program, 'u_rotation'),
+            mousedown: gl.getUniformLocation(this.program, 'u_mousedown'),
+        };
+
+        // Post Processing Program
+        const pvs = this.compileShader(gl, gl.VERTEX_SHADER, POST_V_SHADER);
+        const pfs = this.compileShader(gl, gl.FRAGMENT_SHADER, POST_F_SHADER);
+        this.postProgram = gl.createProgram();
+        gl.attachShader(this.postProgram, pvs);
+        gl.attachShader(this.postProgram, pfs);
+        gl.linkProgram(this.postProgram);
+        this.postLocs = {
+            pos: gl.getAttribLocation(this.postProgram, 'a_pos'),
+            tex: gl.getUniformLocation(this.postProgram, 'u_tex'),
+            time: gl.getUniformLocation(this.postProgram, 'u_time'),
+            res: gl.getUniformLocation(this.postProgram, 'u_res'),
         };
 
         this.bufs = {
@@ -219,7 +290,17 @@ class ParticleSystem {
             size: gl.createBuffer(),
             id: gl.createBuffer(),
             tag: gl.createBuffer(),
+            quad: gl.createBuffer(),
         };
+
+        // Quad Buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.bufs.quad);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+        // FBO Setup
+        this.fbo = gl.createFramebuffer();
+        this.fboTexture = gl.createTexture();
+        this.initFBO();
 
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE); 
@@ -241,6 +322,25 @@ class ParticleSystem {
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         this.gl.useProgram(this.program);
         this.gl.uniform2f(this.locs.res, w, h);
+        
+        this.initFBO();
+    }
+
+    initFBO() {
+        const gl = this.gl;
+        const w = window.innerWidth * this.dpr;
+        const h = window.innerHeight * this.dpr;
+
+        gl.bindTexture(gl.TEXTURE_2D, this.fboTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.fboTexture, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
     setupEvents() {
@@ -264,12 +364,14 @@ class ParticleSystem {
 
         window.addEventListener('mousedown', (e) => {
             this.isDragging = true;
+            this.isMouseDown = true;
             this.lastMousePos = [e.clientX, e.clientY];
             document.body.classList.add('grabbing');
         });
 
         window.addEventListener('mouseup', () => {
             this.isDragging = false;
+            this.isMouseDown = false;
             document.body.classList.remove('grabbing');
         });
 
@@ -368,6 +470,29 @@ class ParticleSystem {
                             id: 850.0 + Math.random() * 100,
                             size: 10.0
                         });
+                    }
+                }
+                this.coordinateCache[char.id] = { points: pts, ar: 1 };
+            } else if (char.id === 'sukuna') {
+                const pts = [];
+                const count = 100000;
+                for (let i = 0; i < count; i++) {
+                    const group = i % 10;
+                    if (group < 3) { // Tiered Bases
+                        const level = i % 3;
+                        const r = 0.6 - level * 0.15;
+                        pts.push({ x: (Math.random()-0.5)*r*2.4, y: 0.4 - level*0.12, z: (Math.random()-0.5)*r*2.4 });
+                    } else if (group < 5) { // Pillars
+                        const px = (i%2==0?1:-1) * 0.45, pz = (Math.floor(i/2)%2==0?1:-1) * 0.45;
+                        pts.push({ x: px, y: (Math.random()-0.5)*1.0, z: pz });
+                    } else { // Pagoda Roofs
+                        const tier = i % 2;
+                        const ty = -0.1 - tier * 0.4;
+                        const tr = 0.8 - tier * 0.3;
+                        const angle = Math.random() * Math.PI * 2;
+                        const rad = Math.sqrt(Math.random()) * tr;
+                        const ry = ty - (tr - rad) * 0.5; 
+                        pts.push({ x: Math.cos(angle)*rad, y: ry, z: Math.sin(angle)*rad });
                     }
                 }
                 this.coordinateCache[char.id] = { points: pts, ar: 1 };
@@ -497,18 +622,20 @@ class ParticleSystem {
     animate() {
         const gl = this.gl;
         const time = Date.now() - this.startTime;
-        gl.clear(gl.COLOR_BUFFER_BIT);
         
         this.transition += (1.0 - this.transition) * 0.024;
-        
-        // Orbit Controls Smoothing (Inertia)
         this.rotX += (this.targetRotX - this.rotX) * 0.1;
         this.rotY += (this.targetRotY - this.rotY) * 0.1;
 
-        // Auto Rotation when idle or slowly
         if (!this.isDragging) {
             this.targetRotY += 0.003;
         }
+
+        // Pass 1: Render Particles to FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        gl.viewport(0, 0, window.innerWidth * this.dpr, window.innerHeight * this.dpr);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         
         gl.useProgram(this.program);
         gl.uniform1f(this.locs.time, time);
@@ -516,6 +643,7 @@ class ParticleSystem {
         gl.uniform1i(this.locs.charId, this.charIdNum || 0);
         gl.uniform2f(this.locs.mouse, this.mouse[0], this.mouse[1]);
         gl.uniform2f(this.locs.rotation, this.rotX, this.rotY);
+        gl.uniform1f(this.locs.mousedown, this.isMouseDown ? 1.0 : 0.0);
         if (this.currentCenter) gl.uniform2f(this.locs.center, this.currentCenter[0], this.currentCenter[1]);
         
         const bind = (name, loc, size) => {
@@ -528,6 +656,28 @@ class ParticleSystem {
         bind('id', this.locs.id, 1); bind('tag', this.locs.tag, 1);
 
         gl.drawArrays(gl.POINTS, 0, this.particleCount);
+
+        // Pass 2: Post-Processing Blit to Screen
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, window.innerWidth * this.dpr, window.innerHeight * this.dpr);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.useProgram(this.postProgram);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.fboTexture);
+        gl.uniform1i(this.postLocs.tex, 0);
+        gl.uniform1f(this.postLocs.time, time);
+        gl.uniform2f(this.postLocs.res, window.innerWidth * this.dpr, window.innerHeight * this.dpr);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.bufs.quad);
+        gl.enableVertexAttribArray(this.postLocs.pos);
+        gl.vertexAttribPointer(this.postLocs.pos, 2, gl.FLOAT, false, 0, 0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        
+        // Break feedback loop for next frame
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
         requestAnimationFrame(() => this.animate());
     }
 }
