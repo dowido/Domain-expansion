@@ -1,12 +1,12 @@
 import './style.css';
 
 const characters = [
-  { id: 'gojo', name: 'Gojo', domain: 'Unlimited Void', desc: "Transmits infinite information, paralyzing the target.", colors: [[162, 155, 254], [108, 92, 231], [255, 255, 255]], asset: '/assets/gojo.png' },
-  { id: 'sukuna', name: 'Sukuna', domain: 'Malevolent Shrine', desc: "A divine shrine that slashes everything in range.", colors: [[255, 118, 117], [214, 48, 49], [45, 52, 54]], asset: '/assets/sukuna.png' },
-  { id: 'megumi', name: 'Megumi', domain: 'Shadow Garden', desc: "Fills the area with shadows and summoned beasts.", colors: [[0, 206, 201], [110, 252, 246], [255, 255, 255]], asset: '/assets/megumi.png' },
-  { id: 'mahito', name: 'Mahito', domain: 'Self-Perfection', desc: "Directly transfigures souls within its reach.", colors: [[223, 230, 233], [255, 204, 204], [255, 126, 185]], asset: '/assets/mahito.png' },
-  { id: 'jogo', name: 'Jogo', domain: 'Iron Mountain', desc: "Incinerates targets inside an active volcanic space.", colors: [[250, 177, 160], [225, 112, 85], [214, 48, 49]], asset: '/assets/jogo.png' },
-  { id: 'hakari', name: 'Hakari', domain: 'Death Gamble', desc: "A Pachinko game granting infinite energy.", colors: [[253, 203, 110], [232, 67, 147], [255, 159, 243]], asset: '/assets/hakari.png' }
+  { id: 'gojo', name: 'Gojo', domain: 'Unlimited Void', desc: "Transmits infinite information, paralyzing the target.", colors: [[255, 255, 255], [162, 155, 254], [108, 92, 231]], asset: '/assets/black_hole.png' },
+  { id: 'sukuna', name: 'Sukuna', domain: 'Malevolent Shrine', desc: "A divine shrine that slashes everything in range.", colors: [[255, 30, 30], [150, 0, 0], [45, 52, 54]], asset: '/assets/sukuna.png' },
+  { id: 'megumi', name: 'Megumi', domain: 'Shadow Garden', desc: "Fills the area with shadows and summoned beasts.", colors: [[0, 255, 255], [0, 168, 255], [255, 255, 255]], asset: '/assets/megumi.png' },
+  { id: 'mahito', name: 'Mahito', domain: 'Self-Perfection', desc: "Directly transfigures souls within its reach.", colors: [[255, 126, 185], [255, 180, 200], [223, 230, 233]], asset: '/assets/mahito.png' },
+  { id: 'jogo', name: 'Jogo', domain: 'Iron Mountain', desc: "Incinerates targets inside an active volcanic space.", colors: [[255, 69, 0], [255, 140, 0], [255, 215, 0]], asset: '/assets/jogo.png' },
+  { id: 'hakari', name: 'Hakari', domain: 'Death Gamble', desc: "A Pachinko game granting infinite energy.", colors: [[255, 0, 150], [0, 168, 255], [255, 215, 0]], asset: '/assets/hakari.png' }
 ];
 
 const IDLE_PALETTE = [[255, 255, 255], [200, 200, 255], [162, 155, 254], [108, 92, 231]];
@@ -88,9 +88,30 @@ const V_SHADER = `
       // Fade in during phase 2 only
       v_alpha = ep2 * 0.7 + 0.3;
     } else {
-      // === ATMOSPHERE: continuous white star drift ===
-      pos.x += sin(u_time * 0.0005 + a_id * 2.14) * 50.0;
-      pos.y += cos(u_time * 0.0006 + a_id * 1.73) * 50.0;
+      // === ATMOSPHERE: reactive stars ===
+      vec2 d = pos - u_center;
+      float dist = length(d);
+      
+      // Only react when a character is active (phase2 > 0)
+      float influence = ep2; 
+      
+      if (u_char_id == 1) {
+        // Gojo: Very subtle gravitational pull and cosmic swirl
+        float angle = atan(d.y, d.x) + (u_time * 0.0001 + 25.0 / (dist + 350.0)) * influence;
+        pos = u_center + vec2(cos(angle), sin(angle)) * dist;
+        pos -= normalize(d) * (sin(u_time * 0.001 + dist * 0.01) * 3.0) * influence;
+      }
+      else if (u_char_id == 5) {
+        // Jogo: Rising heat shimmer
+        pos.y -= abs(sin(u_time * 0.003 + dist * 0.01)) * 20.0 * influence;
+        pos.x += sin(u_time * 0.002 + pos.y * 0.01) * 8.0 * influence;
+      }
+
+      // Base idle drift
+      pos.x += sin(u_time * 0.0005 + a_id * 2.14) * 40.0;
+      pos.y += cos(u_time * 0.0006 + a_id * 1.73) * 40.0;
+
+      // Subtle dynamic tint based on character energy
       v_color = mix(a_color, vec3(1.0, 1.0, 1.0), 0.75);
       v_alpha = 0.4 + 0.3 * sin(u_time * 0.003 + a_id * 6.28);
     }
@@ -122,7 +143,11 @@ class ParticleSystem {
   constructor() {
     this.canvas = document.getElementById('particleCanvas');
     this.gl = this.canvas.getContext('webgl', { alpha: true });
-    this.particleCount = 80000;
+    
+    // Performance Optimization: Reduced particle count for mobile devices
+    const isMobile = window.innerWidth < 768;
+    this.particleCount = isMobile ? 35000 : 80000;
+    
     this.dpr = window.devicePixelRatio || 1;
 
     this.positions = new Float32Array(this.particleCount * 2);
@@ -273,8 +298,11 @@ class ParticleSystem {
         for (let x = 0; x < ow; x++) {
           const idx = (y * ow + x) * 4;
           const r = data[idx], g = data[idx+1], b = data[idx+2];
-          if (r + g + b > 40) { 
-            const nx = x / ow, ny = y / oh;
+          const nx = x / ow, ny = y / oh;
+          const distFromCenter = Math.sqrt(Math.pow(nx - 0.5, 2) + Math.pow(ny - 0.5, 2));
+          
+          // Radial mask (0.48) removes corner artifacts + brightness threshold
+          if (r + g + b > 40 && distFromCenter < 0.48) { 
             pts.push({nx, ny});
             mnx = Math.min(mnx, nx); mxx = Math.max(mxx, nx);
             mny = Math.min(mny, ny); mxy = Math.max(mxy, ny);
@@ -310,8 +338,9 @@ class ParticleSystem {
       if (i < shapeThresh) {
         // Shape particle
         const p = points[i % points.length];
-        this.targets[i*2] = p.x * sw + offX; 
-        this.targets[i*2+1] = p.y * sh + offY;
+        // Added slight random jitter to targets to prevent rigid grid look
+        this.targets[i*2] = p.x * sw + offX + (Math.random() - 0.5) * 5.0; 
+        this.targets[i*2+1] = p.y * sh + offY + (Math.random() - 0.5) * 5.0;
         this.tags[i] = 1.0; // shape
         const c = char.colors[i % char.colors.length];
         this.colors[i*3] = c[0] / 255; 
