@@ -143,19 +143,19 @@ class ParticleSystem {
   constructor() {
     this.canvas = document.getElementById('particleCanvas');
     this.gl = this.canvas.getContext('webgl', { alpha: true });
-    
+
     // Performance Optimization: Reduced particle count for mobile devices
-    const isMobile = window.innerWidth < 768;
-    this.particleCount = isMobile ? 35000 : 80000;
-    
+
+    this.particleCount = 200000;
+
     this.dpr = window.devicePixelRatio || 1;
 
     this.positions = new Float32Array(this.particleCount * 2);
-    this.targets   = new Float32Array(this.particleCount * 2);
-    this.colors    = new Float32Array(this.particleCount * 3);
-    this.sizes     = new Float32Array(this.particleCount);
-    this.ids       = new Float32Array(this.particleCount);
-    this.tags      = new Float32Array(this.particleCount); // 0=atmosphere, 1=shape
+    this.targets = new Float32Array(this.particleCount * 2);
+    this.colors = new Float32Array(this.particleCount * 3);
+    this.sizes = new Float32Array(this.particleCount);
+    this.ids = new Float32Array(this.particleCount);
+    this.tags = new Float32Array(this.particleCount); // 0=atmosphere, 1=shape
 
     this.coordinateCache = {};
     this.activeChar = null;
@@ -187,26 +187,26 @@ class ParticleSystem {
     gl.useProgram(this.program);
 
     this.locs = {
-      pos:     gl.getAttribLocation(this.program, 'a_pos'),
-      target:  gl.getAttribLocation(this.program, 'a_target'),
-      color:   gl.getAttribLocation(this.program, 'a_color'),
-      size:    gl.getAttribLocation(this.program, 'a_size'),
-      id:      gl.getAttribLocation(this.program, 'a_id'),
-      tag:     gl.getAttribLocation(this.program, 'a_tag'),
-      res:     gl.getUniformLocation(this.program, 'u_res'),
-      time:    gl.getUniformLocation(this.program, 'u_time'),
-      trans:   gl.getUniformLocation(this.program, 'u_transition'),
-      charId:  gl.getUniformLocation(this.program, 'u_char_id'),
-      center:  gl.getUniformLocation(this.program, 'u_center'),
+      pos: gl.getAttribLocation(this.program, 'a_pos'),
+      target: gl.getAttribLocation(this.program, 'a_target'),
+      color: gl.getAttribLocation(this.program, 'a_color'),
+      size: gl.getAttribLocation(this.program, 'a_size'),
+      id: gl.getAttribLocation(this.program, 'a_id'),
+      tag: gl.getAttribLocation(this.program, 'a_tag'),
+      res: gl.getUniformLocation(this.program, 'u_res'),
+      time: gl.getUniformLocation(this.program, 'u_time'),
+      trans: gl.getUniformLocation(this.program, 'u_transition'),
+      charId: gl.getUniformLocation(this.program, 'u_char_id'),
+      center: gl.getUniformLocation(this.program, 'u_center'),
     };
 
     this.bufs = {
-      pos:    gl.createBuffer(),
+      pos: gl.createBuffer(),
       target: gl.createBuffer(),
-      color:  gl.createBuffer(),
-      size:   gl.createBuffer(),
-      id:     gl.createBuffer(),
-      tag:    gl.createBuffer(),
+      color: gl.createBuffer(),
+      size: gl.createBuffer(),
+      id: gl.createBuffer(),
+      tag: gl.createBuffer(),
     };
 
     gl.enable(gl.BLEND);
@@ -238,10 +238,10 @@ class ParticleSystem {
     const w = window.innerWidth, h = window.innerHeight;
     for (let i = 0; i < this.particleCount; i++) {
       const x = Math.random() * w, y = Math.random() * h;
-      this.positions[i*2] = x; this.positions[i*2+1] = y;
-      this.targets[i*2] = x; this.targets[i*2+1] = y;
+      this.positions[i * 2] = x; this.positions[i * 2 + 1] = y;
+      this.targets[i * 2] = x; this.targets[i * 2 + 1] = y;
       const c = IDLE_PALETTE[i % IDLE_PALETTE.length];
-      this.colors[i*3] = c[0] / 255; this.colors[i*3+1] = c[1] / 255; this.colors[i*3+2] = c[2] / 255;
+      this.colors[i * 3] = c[0] / 255; this.colors[i * 3 + 1] = c[1] / 255; this.colors[i * 3 + 2] = c[2] / 255;
       this.sizes[i] = Math.random() * 1.5 + 0.5;
       this.ids[i] = Math.random() * 1000;
     }
@@ -263,14 +263,14 @@ class ParticleSystem {
 
   async setShape(char) {
     console.log('Setting shape for:', char.id);
-    
+
     // CONTINUOUS TRANSITION:
     // Calculate current rendered positions and set them as the new start (pos)
     // This allows particles to flow smoothly from one shape to the next.
-    const t = Math.pow(this.transition, 0.6); 
+    const t = Math.pow(this.transition, 0.6);
     for (let i = 0; i < this.particleCount; i++) {
-      this.positions[i*2]   = this.positions[i*2] * (1-t) + this.targets[i*2] * t;
-      this.positions[i*2+1] = this.positions[i*2+1] * (1-t) + this.targets[i*2+1] * t;
+      this.positions[i * 2] = this.positions[i * 2] * (1 - t) + this.targets[i * 2] * t;
+      this.positions[i * 2 + 1] = this.positions[i * 2 + 1] * (1 - t) + this.targets[i * 2 + 1] * t;
     }
     this.updateBuffer('pos', this.positions);
     this.transition = 0; // Reset for new target
@@ -281,13 +281,13 @@ class ParticleSystem {
       const img = new Image();
       img.src = char.asset;
       try {
-        await new Promise((resolve, reject) => { 
-          img.onload = resolve; 
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
           img.onerror = () => reject(new Error('Failed: ' + char.asset));
         });
       } catch (err) { console.error(err); return; }
 
-      const ow = 256; 
+      const ow = 256;
       const oh = Math.round(ow * (img.height / img.width));
       const oc = document.createElement('canvas'); oc.width = ow; oc.height = oh;
       const ctx = oc.getContext('2d'); ctx.drawImage(img, 0, 0, ow, oh);
@@ -297,13 +297,13 @@ class ParticleSystem {
       for (let y = 0; y < oh; y++) {
         for (let x = 0; x < ow; x++) {
           const idx = (y * ow + x) * 4;
-          const r = data[idx], g = data[idx+1], b = data[idx+2];
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2];
           const nx = x / ow, ny = y / oh;
           const distFromCenter = Math.sqrt(Math.pow(nx - 0.5, 2) + Math.pow(ny - 0.5, 2));
-          
+
           // Radial mask (0.48) removes corner artifacts + brightness threshold
-          if (r + g + b > 40 && distFromCenter < 0.48) { 
-            pts.push({nx, ny});
+          if (r + g + b > 40 && distFromCenter < 0.48) {
+            pts.push({ nx, ny });
             mnx = Math.min(mnx, nx); mxx = Math.max(mxx, nx);
             mny = Math.min(mny, ny); mxy = Math.max(mxy, ny);
           }
@@ -312,9 +312,9 @@ class ParticleSystem {
       console.timeEnd('scan-' + char.id);
       console.log('Points found:', pts.length);
       const rw = mxx - mnx || 1, rh = mxy - mny || 1;
-      this.coordinateCache[char.id] = { 
-        points: pts.map(p => ({x:(p.nx-mnx)/rw, y: (p.ny-mny)/rh})), 
-        ar: rw / rh 
+      this.coordinateCache[char.id] = {
+        points: pts.map(p => ({ x: (p.nx - mnx) / rw, y: (p.ny - mny) / rh })),
+        ar: rw / rh
       };
     }
 
@@ -322,11 +322,11 @@ class ParticleSystem {
     const vw = window.innerWidth, vh = window.innerHeight;
     const barH = 120, padding = 40;
     const safeW = vw - padding * 2, safeH = vh - barH - padding * 2;
-    
+
     let sw, sh;
-    if (ar > (safeW / safeH)) { sw = safeW; sh = sw / ar; } 
+    if (ar > (safeW / safeH)) { sw = safeW; sh = sw / ar; }
     else { sh = safeH; sw = sh * ar; }
-    
+
     const cx = vw / 2, cy = (vh - barH) / 2 + 20;
     const offX = cx - sw / 2, offY = cy - sh / 2;
     this.currentCenter = [cx, cy];
@@ -339,21 +339,21 @@ class ParticleSystem {
         // Shape particle
         const p = points[i % points.length];
         // Added slight random jitter to targets to prevent rigid grid look
-        this.targets[i*2] = p.x * sw + offX + (Math.random() - 0.5) * 5.0; 
-        this.targets[i*2+1] = p.y * sh + offY + (Math.random() - 0.5) * 5.0;
+        this.targets[i * 2] = p.x * sw + offX + (Math.random() - 0.5) * 5.0;
+        this.targets[i * 2 + 1] = p.y * sh + offY + (Math.random() - 0.5) * 5.0;
         this.tags[i] = 1.0; // shape
         const c = char.colors[i % char.colors.length];
-        this.colors[i*3] = c[0] / 255; 
-        this.colors[i*3+1] = c[1] / 255; 
-        this.colors[i*3+2] = c[2] / 255;
+        this.colors[i * 3] = c[0] / 255;
+        this.colors[i * 3 + 1] = c[1] / 255;
+        this.colors[i * 3 + 2] = c[2] / 255;
       } else {
         // Atmosphere particle — white, scattered
-        this.targets[i*2] = Math.random() * vw;
-        this.targets[i*2+1] = Math.random() * vh;
+        this.targets[i * 2] = Math.random() * vw;
+        this.targets[i * 2 + 1] = Math.random() * vh;
         this.tags[i] = 0.0; // atmosphere
-        this.colors[i*3] = 1.0;   // white
-        this.colors[i*3+1] = 1.0;
-        this.colors[i*3+2] = 1.0;
+        this.colors[i * 3] = 1.0;   // white
+        this.colors[i * 3 + 1] = 1.0;
+        this.colors[i * 3 + 2] = 1.0;
       }
     }
     this.updateBuffer('target', this.targets);
@@ -367,8 +367,8 @@ class ParticleSystem {
     // Capture current rendered positions so particles flow from wherever they are
     const t = this.transition * this.transition * (3.0 - 2.0 * this.transition);
     for (let i = 0; i < this.particleCount; i++) {
-      this.positions[i*2]   = this.positions[i*2]   * (1 - t) + this.targets[i*2]   * t;
-      this.positions[i*2+1] = this.positions[i*2+1] * (1 - t) + this.targets[i*2+1] * t;
+      this.positions[i * 2] = this.positions[i * 2] * (1 - t) + this.targets[i * 2] * t;
+      this.positions[i * 2 + 1] = this.positions[i * 2 + 1] * (1 - t) + this.targets[i * 2 + 1] * t;
     }
     this.updateBuffer('pos', this.positions);
     this.transition = 0;
@@ -379,10 +379,10 @@ class ParticleSystem {
     // All particles become atmosphere (tag 0) and drift white
     const w = window.innerWidth, h = window.innerHeight;
     for (let i = 0; i < this.particleCount; i++) {
-      this.targets[i*2]   = Math.random() * w;
-      this.targets[i*2+1] = Math.random() * h;
+      this.targets[i * 2] = Math.random() * w;
+      this.targets[i * 2 + 1] = Math.random() * h;
       this.tags[i] = 0.0;
-      this.colors[i*3] = 1.0; this.colors[i*3+1] = 1.0; this.colors[i*3+2] = 1.0;
+      this.colors[i * 3] = 1.0; this.colors[i * 3 + 1] = 1.0; this.colors[i * 3 + 2] = 1.0;
     }
     this.updateBuffer('target', this.targets);
     this.updateBuffer('tag', this.tags);
@@ -406,7 +406,7 @@ class ParticleSystem {
       gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
     };
     bind('pos', this.locs.pos, 2); bind('target', this.locs.target, 2);
-    bind('color', this.locs.color, 3); bind('size', this.locs.size, 1); 
+    bind('color', this.locs.color, 3); bind('size', this.locs.size, 1);
     bind('id', this.locs.id, 1); bind('tag', this.locs.tag, 1);
 
     gl.drawArrays(gl.POINTS, 0, this.particleCount);
