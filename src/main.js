@@ -131,7 +131,7 @@ class ParticleSystem {
         this.canvas = document.getElementById('particleCanvas');
         this.gl = this.canvas.getContext('webgl', { alpha: true, depth: false });
 
-        this.particleCount = 120000;
+        this.particleCount = 300000;
         this.dpr = window.devicePixelRatio || 1;
 
         this.positions = new Float32Array(this.particleCount * 3);
