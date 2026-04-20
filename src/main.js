@@ -55,14 +55,12 @@ void main() {
     mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cx, -sx, 0.0, sx, cx);
     mat3 ry = mat3(cy, 0.0, sy, 0.0, 1.0, 0.0, -sy, 0.0, cy);
     
-    pos = ry * rx * pos;
-
+    // Local Character Animations (Before Orbit Rotation)
     if (a_tag > 0.5) {
         if (u_char_id == 1) { 
             float gojo_expand = sin(ep1 * 3.14) * 150.0;
             pos += normalize(pos + vec3(0.001)) * gojo_expand;
             
-            // Fast 3D spin (wheel-like)
             float gojo_spin = u_time * 0.012; 
             float c = cos(gojo_spin), s = sin(gojo_spin);
             pos.xy = mat2(c, -s, s, c) * pos.xy;
@@ -82,14 +80,30 @@ void main() {
             pos.y += cos(u_time * 0.004 + a_id * 2.71) * 8.0;
         }
         else if (u_char_id == 5) { 
-            pos.x += sin(u_time * 0.005 + pos.y * 0.01) * 5.0;
-            pos.y -= abs(sin(u_time * 0.003 + a_id)) * 4.0;
+            // Jogo: Rotate along Y-axis solely
+            float jogo_roll = u_time * 0.004;
+            float c = cos(jogo_roll), s = sin(jogo_roll);
+            pos.xz = mat2(c, -s, s, c) * pos.xz;
+
+            if (a_id > 800.0) {
+                float lift = mod(u_time * 0.0008 + (a_id * 0.01), 1.0);
+                pos.y -= lift * 420.0;
+                pos.x += sin(u_time * 0.003 + a_id) * lift * 60.0;
+                pos.z += cos(u_time * 0.002 + a_id) * lift * 60.0;
+                v_alpha *= (1.0 - lift);
+                v_color = vec3(1.0); // Pure white smoke as requested
+            }
         }
         else if (u_char_id == 6) { 
             float spin = sin(u_time * 0.04 + a_id * 6.28) * 10.0;
             pos.x += spin * (hash(a_id) - 0.5);
             pos.z += spin * (hash2(a_id) - 0.5);
         }
+    }
+
+    pos = ry * rx * pos;
+
+    if (a_tag > 0.5) {
         v_color = a_color;
         v_alpha = ep2 * 0.6 + 0.2;
     } else {
@@ -137,7 +151,7 @@ class ParticleSystem {
         this.canvas = document.getElementById('particleCanvas');
         this.gl = this.canvas.getContext('webgl', { alpha: true, depth: false });
 
-        this.particleCount = 300000;
+        this.particleCount = 400000;
         this.dpr = window.devicePixelRatio || 1;
 
         this.positions = new Float32Array(this.particleCount * 3);
@@ -154,6 +168,9 @@ class ParticleSystem {
         this.mouse = [window.innerWidth / 2, window.innerHeight / 2];
 
         // Orbit Controls State
+
+
+
         this.rotX = 0;
         this.rotY = 0;
         this.targetRotX = 0;
@@ -330,22 +347,28 @@ class ParticleSystem {
                 this.coordinateCache[char.id] = { points: pts, ar: 1 };
             } else if (char.id === 'jogo') {
                 const pts = [];
-                const count = 50000;
+                const count = 100000;
                 for (let i = 0; i < count; i++) {
-                    const r = Math.sqrt(Math.random()) * 0.5;
-                    const angle = Math.random() * Math.PI * 2;
-                    const x = Math.cos(angle) * r;
-                    const y = Math.sin(angle) * r;
-                    let z = (0.5 - r) * 0.6; // Slope
-                    
-                    // Crater logic
-                    if (r < 0.1) {
-                        z = (0.5 - 0.1) * 0.6 - (0.1 - r) * 0.8;
+                    if (i < 80000) { // Mountain Surface
+                        const r = Math.sqrt(Math.random()) * 0.65;
+                        const angle = Math.random() * Math.PI * 2;
+                        const x = Math.cos(angle) * r;
+                        const z = Math.sin(angle) * r; 
+                        let y = (0.65 - r) * 1.1; 
+                        if (r < 0.08) { y -= (0.08 - r) * 0.4; } 
+                        const noise = (Math.random() - 0.5) * 0.03;
+                        pts.push({ x, y: -y + 0.3, z: z + noise, id: Math.random() * 100 }); 
+                    } else { // Eruption/White Smoke hadi haifanyi
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = Math.random() * 0.05;
+                        pts.push({ 
+                            x: Math.cos(angle) * r, 
+                            y: -0.5, 
+                            z: Math.sin(angle) * r, 
+                            id: 850.0 + Math.random() * 100,
+                            size: 3.5
+                        });
                     }
-                    
-                    // Add some rock noise
-                    const noise = (Math.random() - 0.5) * 0.04;
-                    pts.push({ x, y, z: z + noise });
                 }
                 this.coordinateCache[char.id] = { points: pts, ar: 1 };
             } else {
@@ -426,6 +449,8 @@ class ParticleSystem {
                 }
 
                 this.tags[i] = 1.0;
+                this.ids[i] = p.id !== undefined ? p.id : Math.random() * 1000;
+                this.sizes[i] = p.size !== undefined ? p.size : (Math.random() * 1.5 + 0.5);
                 const c = char.colors[i % char.colors.length];
                 this.colors[i * 3] = c[0] / 255;
                 this.colors[i * 3 + 1] = c[1] / 255;
