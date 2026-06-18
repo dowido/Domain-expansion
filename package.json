@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^8.0.4"
+    "vite": "^8.0.16"
   },
   "dependencies": {
     "pixi.js": "^8.18.1"
