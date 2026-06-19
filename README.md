@@ -1,1 +1,1 @@
-dddom expacnsion by don
+dddom expansion by don
